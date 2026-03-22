@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0b0b0d; --surface: #131316; --card: #1a1a1f; --card2: #1e1e24;
+  --border: rgba(255,255,255,0.06); --border2: rgba(255,255,255,0.04);
+  --txt: rgba(255,255,255,0.90); --txt2: rgba(255,255,255,0.50); --txt3: rgba(255,255,255,0.25);
+  --green: #30d158; --red: #ff453a; --orange: #ff9f0a; --yellow: #ffd60a;
+  --blue: #0a84ff; --purple: #bf5af2; --cyan: #64d2ff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+  background: var(--bg); color: var(--txt); -webkit-font-smoothing: antialiased;
+}
+
+/* 顶部栏 */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(11,11,13,0.92);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.server-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg,#2a2a30,#3a3a42);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.server-name { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; }
+.server-sub { font-size: 10px; color: var(--txt2); margin-top: 1px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
+.dot-green { background: var(--green); color: var(--green); }
+.dot-red { background: var(--red); color: var(--red); }
+.status-text { font-size: 10px; color: var(--txt2); font-weight: 500; }
+.status-bar { display: flex; align-items: center; gap: 8px; }
+.uptime-chip { font-size: 10px; color: var(--txt2); background: var(--card); border: 1px solid var(--border); padding: 2px 8px; border-radius: 6px; }
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+.topbar-time { font-size: 13px; font-weight: 600; }
+.topbar-date { font-size: 10px; color: var(--txt2); text-align: right; }
+
+/* 页面 */
+.page { padding: 16px 16px 24px; max-width: 1200px; margin: 0 auto; }
+
+/* 指标行 */
+.metrics-row { display: grid; grid-template-columns: repeat(6,1fr); gap: 6px; margin-bottom: 12px; }
+.metric-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 10px 8px; position: relative; overflow: hidden;
+  transition: border-color 0.2s;
+}
+.metric-card:hover { border-color: rgba(255,255,255,0.12); }
+.metric-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 10px 10px 0 0; }
+.metric-card.cpu::before { background: var(--orange); }
+.metric-card.mem::before { background: var(--green); }
+.metric-card.gpu::before { background: var(--purple); }
+.metric-card.disk::before { background: var(--red); }
+.metric-card.net::before { background: var(--blue); }
+.metric-card.temp::before { background: var(--yellow); }
+
+.metric-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+.metric-label { font-size: 9px; font-weight: 600; color: var(--txt2); text-transform: uppercase; letter-spacing: 0.5px; }
+.metric-badge { font-size: 8px; padding: 1px 5px; border-radius: 4px; font-weight: 600; }
+.badge-ok { background: rgba(48,209,88,0.12); color: var(--green); }
+.badge-warn { background: rgba(255,159,10,0.12); color: var(--orange); }
+.badge-alert { background: rgba(255,69,58,0.12); color: var(--red); }
+
+.metric-ring-wrap { width: 44px; height: 44px; margin: 0 auto 6px; position: relative; }
+.metric-ring-wrap svg { width: 44px; height: 44px; transform: rotate(-90deg); }
+.metric-track { fill: none; stroke-width: 4.5; }
+.metric-fill { fill: none; stroke-width: 4.5; stroke-linecap: round; }
+.metric-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.metric-val { font-size: 11px; font-weight: 700; line-height: 1; }
+.metric-unit { font-size: 7px; color: var(--txt2); }
+.metric-info { font-size: 9px; color: var(--txt3); text-align: center; }
+.metric-info2 { font-size: 8px; color: var(--txt2); text-align: center; margin-top: 1px; }
+
+/* 温度 */
+.temp-rings { display: flex; align-items: center; gap: 10px; }
+.temp-rings svg { flex-shrink: 0; }
+.temp-rings-info { flex: 1; min-width: 0; }
+.temp-line { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.temp-line:last-child { margin-bottom: 0; }
+.temp-name { font-size: 10px; color: var(--txt2); font-weight: 500; }
+.temp-val { font-size: 11px; font-weight: 700; }
+
+/* 区块 */
+.section-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.section-title { font-size: 11px; font-weight: 600; }
+.section-tag { font-size: 9px; color: var(--txt2); }
+
+/* 图表 */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.chart-wrap { height: 110px; position: relative; }
+
+/* 线程 */
+.thread-grid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.thread-bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.thread-bar-track { width: 20px; height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+.thread-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease, background 0.3s ease; }
+.thread-name { font-size: 7px; color: var(--txt3); font-weight: 600; }
+
+/* 进度条 */
+.prog-item { margin-bottom: 8px; }
+.prog-item:last-child { margin-bottom: 0; }
+.prog-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.prog-name { font-size: 10px; color: var(--txt2); }
+.prog-pct { font-size: 10px; font-weight: 700; }
+.prog-bar { height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+/* 安全列表 */
+.sec-list {}
+.sec-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.sec-item:last-child { border-bottom: none; padding-bottom: 0; }
+.sec-item:first-child { padding-top: 0; }
+.sec-icon { font-size: 16px; }
+.sec-name { font-size: 11px; font-weight: 500; flex: 1; }
+.sec-sub { font-size: 9px; color: var(--txt2); margin-top: 1px; }
+.sec-badge { font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 5px; }
+
+/* 两列 */
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* 连接提示 */
+.conn-banner {
+  display: none;
+  background: rgba(255,69,58,0.1); border: 1px solid rgba(255,69,58,0.3);
+  border-radius: 8px; padding: 10px 16px; margin-bottom: 12px;
+  font-size: 11px; color: var(--red);
+}
+.conn-banner.show { display: block; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.topbar { animation: fadeUp 0.3s ease; }
+.metrics-row { animation: fadeUp 0.35s ease 0.05s backwards; }
+.section-card { animation: fadeUp 0.35s ease 0.1s backwards; }
+.charts-row { animation: fadeUp 0.35s ease 0.15s backwards; }
+.row-2 .section-card { animation: fadeUp 0.35s ease 0.2s backwards; }
+
+@media (max-width: 900px) { .metrics-row { grid-template-columns: repeat(3,1fr); } }
+@media (max-width: 600px) { .metrics-row { grid-template-columns: repeat(2,1fr); } .charts-row, .row-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="server-icon">&#x1F5A5;</div>
+    <div>
+      <div class="server-name" id="hostname">LINCHENGYIN-PC</div>
+      <div class="server-sub" id="platformInfo">Windows 11</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-dot dot-green" id="statusDot"></div>
+    <span class="status-text" id="statusText">在线</span>
+    <span class="uptime-chip" id="uptimeChip">--</span>
+  </div>
+  <div class="topbar-right">
+    <div>
+      <div class="topbar-time" id="clock">--:--:--</div>
+      <div class="topbar-date" id="dateStr">----/--/--</div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+  <!-- 连接状态提示 -->
+  <div class="conn-banner" id="connBanner">
+    无法连接到服务器，请确保 server.py 已运行（`python server.py`）
+  </div>
+
+  <!-- 指标行 -->
+  <div class="metrics-row">
+    <div class="metric-card cpu">
+      <div class="metric-top">
+        <span class="metric-label">CPU</span>
+        <span class="metric-badge badge-ok" id="cpuBadge">正常</span>
+      </div>
+      <div class="metric-ring-wrap">
+        <svg viewBox="0 0 44 44">
+          <circle class="metric-track" cx="22" cy="22" r="17" stroke="rgba(255,255,255,0.06)"/>
+          <circle class="metric-fill" id="cpuRing" cx="22" cy="22" r="17" stroke="#FF9F0A" stroke-dasharray="107" stroke-dashoffset="107"/>
+        </svg>
+        <div class="metric-center">
+          <span class="metric-val" id="cpuVal" style="color:#FF9F0A">--</span>
+          <span class="metric-unit">%</span>
+        </div>
+      </div>
+      <div class="metric-info" id="cpuInfo">--</div>
+    </div>
+
+    <div class="metric-card mem">
+      <div class="metric-top">
+        <span class="metric-label">内存</span>
+        <span class="metric-badge badge-ok" id="memBadge">正常</span>
+      </div>
+      <div class="metric-ring-wrap">
+        <svg viewBox="0 0 44 44">
+          <circle class="metric-track" cx="22" cy="22" r="17" stroke="rgba(255,255,255,0.06)"/>
+          <circle class="metric-fill" id="memRing" cx="22" cy="22" r="17" stroke="#30D158" stroke-dasharray="107" stroke-dashoffset="107"/>
+        </svg>
+        <div class="metric-center">
+          <span class="metric-val" id="memVal" style="color:#30D158">--</span>
+          <span class="metric-unit">%</span>
+        </div>
+      </div>
+      <div class="metric-info" id="memInfo">-- / -- GB</div>
+    </div>
+
+    <div class="metric-card gpu">
+      <div class="metric-top">
+        <span class="metric-label">GPU</span>
+        <span class="metric-badge badge-ok" id="gpuBadge">正常</span>
+      </div>
+      <div class="metric-ring-wrap">
+        <svg viewBox="0 0 44 44">
+          <circle class="metric-track" cx="22" cy="22" r="17" stroke="rgba(255,255,255,0.06)"/>
+          <circle class="metric-fill" id="gpuRing" cx="22" cy="22" r="17" stroke="#BF5AF2" stroke-dasharray="107" stroke-dashoffset="107"/>
+        </svg>
+        <div class="metric-center">
+          <span class="metric-val" id="gpuVal" style="color:#BF5AF2">--</span>
+          <span class="metric-unit">%</span>
+        </div>
+      </div>
+      <div class="metric-info" id="gpuInfo">--</div>
+    </div>
+
+    <div class="metric-card disk">
+      <div class="metric-top">
+        <span class="metric-label">磁盘 C</span>
+        <span class="metric-badge badge-alert" id="diskBadge">告警</span>
+      </div>
+      <div class="metric-ring-wrap">
+        <svg viewBox="0 0 44 44">
+          <circle class="metric-track" cx="22" cy="22" r="17" stroke="rgba(255,255,255,0.06)"/>
+          <circle class="metric-fill" id="diskRing" cx="22" cy="22" r="17" stroke="#FF453A" stroke-dasharray="107" stroke-dashoffset="107"/>
+        </svg>
+        <div class="metric-center">
+          <span class="metric-val" id="diskVal" style="color:#FF453A">--</span>
+          <span class="metric-unit">%</span>
+        </div>
+      </div>
+      <div class="metric-info" id="diskInfo">-- GB</div>
+    </div>
+
+    <div class="metric-card net">
+      <div class="metric-top">
+        <span class="metric-label">网络</span>
+        <span class="metric-badge badge-ok">正常</span>
+      </div>
+      <div class="metric-ring-wrap">
+        <svg viewBox="0 0 44 44">
+          <circle class="metric-track" cx="22" cy="22" r="17" stroke="rgba(255,255,255,0.06)"/>
+          <circle class="metric-fill" id="netRing" cx="22" cy="22" r="17" stroke="#0A84FF" stroke-dasharray="107" stroke-dashoffset="107"/>
+        </svg>
+        <div class="metric-center">
+          <span class="metric-val" style="color:#0A84FF" id="netSpeed">--</span>
+          <span class="metric-unit">Mbps</span>
+        </div>
+      </div>
+      <div class="metric-info" id="netInfo">--</div>
+    </div>
+
+    <!-- 温度 -->
+    <div class="metric-card temp">
+      <div class="metric-top">
+        <span class="metric-label">温度</span>
+        <span class="metric-badge badge-ok" id="tempBadge">正常</span>
+      </div>
+      <div class="temp-rings">
+        <svg viewBox="0 0 44 44" width="44" height="44">
+          <circle class="metric-track" cx="22" cy="22" r="17" stroke="rgba(255,255,255,0.06)"/>
+          <circle class="metric-fill" id="cpuTempRing" cx="22" cy="22" r="17" stroke="#FF453A" stroke-dasharray="107" stroke-dashoffset="107"/>
+          <circle cx="22" cy="22" r="12" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
+          <circle id="gpuTempRing" cx="22" cy="22" r="12" fill="none" stroke="#FFD60A" stroke-width="4" stroke-dasharray="75" stroke-dashoffset="75" transform="rotate(-90 22 22)"/>
+        </svg>
+        <div class="temp-rings-info">
+          <div class="temp-line">
+            <span class="temp-name">CPU</span>
+            <span class="temp-val" id="cpuTempVal" style="color:#FF453A">--°C</span>
+          </div>
+          <div class="temp-line">
+            <span class="temp-name">GPU</span>
+            <span class="temp-val" id="gpuTempVal" style="color:#FFD60A">--°C</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CPU 线程 -->
+  <div class="section-card">
+    <div class="section-header">
+      <span class="section-title">CPU 线程</span>
+      <span class="section-tag" id="threadCount">-- 线程</span>
+    </div>
+    <div class="thread-grid" id="threadGrid"></div>
+  </div>
+
+  <!-- 图表 -->
+  <div class="charts-row">
+    <div class="section-card" style="margin-bottom:0">
+      <div class="section-header"><span class="section-title">CPU &amp; 内存</span><span class="section-tag">实时</span></div>
+      <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+    </div>
+    <div class="section-card" style="margin-bottom:0">
+      <div class="section-header"><span class="section-title">GPU 显存</span><span class="section-tag" id="gpuMemTag">--</span></div>
+      <div class="chart-wrap"><canvas id="gpuChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 两列 -->
+  <div class="row-2">
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title">存储</span>
+        <span class="metric-badge badge-alert" style="font-size:9px" id="diskAlertTag">⚠️ 告警</span>
+      </div>
+      <div id="diskList"></div>
+    </div>
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title">安全</span>
+        <span class="metric-badge badge-ok" style="font-size:9px">● 正常</span>
+      </div>
+      <div class="sec-list">
+        <div class="sec-item"><span class="sec-icon">&#x1F525;</span><div><div class="sec-name">火绒安全中心</div><div class="sec-sub">HipsDaemon · 运行中</div></div><span class="sec-badge badge-ok">安全</span></div>
+        <div class="sec-item"><span class="sec-icon">&#x1F6E1;</span><div><div class="sec-name">Windows 防火墙</div><div class="sec-sub">已启用</div></div><span class="sec-badge badge-ok">开启</span></div>
+        <div class="sec-item"><span class="sec-icon">&#x1F512;</span><div><div class="sec-name">Windows 安全中心</div><div class="sec-sub">SecurityHealthService</div></div><span class="sec-badge badge-ok">正常</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var CIRC = 107, CIRC_INNER = 75;
+var lc, gpuChart;
+var lastNet = null, lastNetTime = null;
+
+// === 时钟 ===
+function updateClock() {
+  var now = new Date();
+  document.getElementById('clock').textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  var days = ['日','一','二','三','四','五','六'];
+  document.getElementById('dateStr').textContent = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + days[now.getDay()];
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// === 状态 ===
+function setBadge(id, val, warn, crit) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (val >= crit) { el.className = 'metric-badge badge-alert'; el.textContent = '告警'; }
+  else if (val >= warn) { el.className = 'metric-badge badge-warn'; el.textContent = '注意'; }
+  else { el.className = 'metric-badge badge-ok'; el.textContent = '正常'; }
+}
+
+function ring(id, val, max) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.strokeDashoffset = CIRC - (Math.min(val, max) / max) * CIRC;
+}
+
+function getColor(pct) {
+  if (pct < 20) return '#30D158';
+  if (pct < 60) return '#FF9F0A';
+  return '#FF453A';
+}
+
+function getDiskColor(pct) {
+  if (pct < 85) return '#30D158';
+  if (pct < 95) return '#FF9F0A';
+  return '#FF453A';
+}
+
+function setTopStatus(ok) {
+  var dot = document.getElementById('statusDot');
+  var txt = document.getElementById('statusText');
+  if (dot) dot.className = ok ? 'status-dot dot-green' : 'status-dot dot-red';
+  if (txt) txt.textContent = ok ? '在线' : '离线';
+}
+
+// === 初始化线程 ===
+function initThreads(count) {
+  document.getElementById('threadCount').textContent = count + ' 线程';
+  var grid = document.getElementById('threadGrid');
+  grid.innerHTML = '';
+  for (var i = 0; i < count; i++) {
+    grid.innerHTML += '<div class="thread-bar-wrap">' +
+      '<div class="thread-bar-track">' +
+        '<div class="thread-bar-fill" id="td' + i + '" style="width:0%;background:#30D158"></div>' +
+      '</div>' +
+      '<div class="thread-name">T' + i + '</div>' +
+    '</div>';
+  }
+}
+initThreads(0);
+
+// === Charts ===
+var CFG = { color: 'rgba(255,255,255,0.35)', borderColor: 'rgba(255,255,255,0.04)' };
+Chart.defaults.color = CFG.color;
+Chart.defaults.borderColor = CFG.borderColor;
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, sans-serif";
+Chart.defaults.plugins.legend.display = false;
+
+var initLabels = [];
+for (var i = 0; i < 16; i++) initLabels.push((i * 2) + 's');
+
+lc = new Chart(document.getElementById('lineChart'), {
+  type: 'line',
+  data: {
+    labels: initLabels,
+    datasets: [
+      { label: 'CPU', data: Array(16).fill(0), borderColor: '#FF9F0A', borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(255,159,10,0.06)' },
+      { label: 'Mem', data: Array(16).fill(0), borderColor: '#30D158', borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill: true, backgroundColor: 'rgba(48,209,88,0.06)' }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { grid: { color: CFG.borderColor }, ticks: { maxTicksLimit: 6, font: { size: 9 } } },
+      y: { min: 0, max: 100, grid: { color: CFG.borderColor }, ticks: { stepSize: 25, font: { size: 9 }, callback: function(v) { return v+'%'; } } }
+    },
+    animation: { duration: 600 }
+  }
+});
+
+gpuChart = new Chart(document.getElementById('gpuChart'), {
+  type: 'doughnut',
+  data: { labels: ['已用','可用'], datasets: [{ data: [0, 1], backgroundColor: ['rgba(191,90,242,0.8)','rgba(191,90,242,0.08)'], borderWidth: 0, hoverOffset: 4 }] },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '70%',
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 6, boxHeight: 6, padding: 10, font: { size: 9 }, borderRadius: 3, useBorderRadius: true } },
+      tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed; return ' ' + ctx.label + ': ' + (v >= 1024 ? (v/1024).toFixed(1)+' GB' : v+' MB'); } } }
+    },
+    animation: { duration: 800 }
+  }
+});
+
+// === 获取真实数据 ===
+var connected = false;
+
+function updateUI(data) {
+  connected = true;
+  document.getElementById('connBanner').classList.remove('show');
+
+  // 基本信息
+  document.getElementById('hostname').textContent = data.hostname || '--';
+  document.getElementById('platformInfo').textContent = (data.platform || '').replace('Windows-', '').substring(0, 30);
+  document.getElementById('uptimeChip').textContent = '运行 ' + (data.uptime || '--');
+
+  // CPU
+  var cpu = data.cpu || 0;
+  ring('cpuRing', cpu, 100);
+  document.getElementById('cpuVal').textContent = Math.round(cpu);
+  document.getElementById('cpuInfo').textContent = (data.cpu_name || '').substring(0, 20);
+  setBadge('cpuBadge', cpu, 70, 90);
+
+  // 内存
+  var mem = data.mem || {};
+  var memPct = mem.percent || 0;
+  ring('memRing', memPct, 100);
+  document.getElementById('memVal').textContent = Math.round(memPct);
+  document.getElementById('memInfo').textContent = (mem.used || '--') + ' / ' + (mem.total || '--') + ' GB';
+  setBadge('memBadge', memPct, 70, 90);
+
+  // GPU
+  var gpu = data.gpu || {};
+  var gpuUtil = gpu.util || 0;
+  ring('gpuRing', gpuUtil, 100);
+  document.getElementById('gpuVal').textContent = Math.round(gpuUtil);
+  if (gpu.mem_total && gpu.mem_total > 0) {
+    var gm = (gpu.mem_used / 1024).toFixed(1) + ' / ' + (gpu.mem_total / 1024).toFixed(0) + ' GB';
+    document.getElementById('gpuInfo').textContent = gpu.name || 'NVIDIA';
+    document.getElementById('gpuMemTag').textContent = gm;
+    gpuChart.data.datasets[0].data = [gpu.mem_used, gpu.mem_total - gpu.mem_used];
+    gpuChart.update('none');
+  } else {
+    document.getElementById('gpuInfo').textContent = '无 NVIDIA GPU';
+    document.getElementById('gpuMemTag').textContent = '--';
+  }
+  setBadge('gpuBadge', gpuUtil, 70, 90);
+
+  // 温度
+  var cpuTemp = gpu.cpu_temp || 0;
+  var gpuTemp = gpu.temp || 0;
+  ring('cpuTempRing', cpuTemp, 100);
+  var gEl = document.getElementById('gpuTempRing');
+  if (gEl) gEl.style.strokeDashoffset = CIRC_INNER - (Math.min(gpuTemp, 100) / 100) * CIRC_INNER;
+  document.getElementById('cpuTempVal').textContent = cpuTemp + '°C';
+  document.getElementById('gpuTempVal').textContent = gpuTemp + '°C';
+  setBadge('tempBadge', Math.max(cpuTemp, gpuTemp), 70, 85);
+
+  // 磁盘 C
+  var diskC = null;
+  (data.disks || []).forEach(function(d) {
+    if (d.id === 'C:') diskC = d;
+  });
+  if (diskC) {
+    ring('diskRing', diskC.percent, 100);
+    document.getElementById('diskVal').textContent = Math.round(diskC.percent);
+    document.getElementById('diskInfo').textContent = diskC.free + ' GB 可用';
+    setBadge('diskBadge', diskC.percent, 80, 90);
+  }
+
+  // 磁盘列表
+  var diskListEl = document.getElementById('diskList');
+  if (diskListEl.innerHTML === '') {
+    (data.disks || []).forEach(function(d, i) {
+      var c = getDiskColor(d.percent);
+      diskListEl.innerHTML += '<div class="prog-item">' +
+        '<div class="prog-top"><span class="prog-name">' + d.id + ' ' + (d.name||'').substring(0,18) + '</span><span class="prog-pct" style="color:' + c + '">' + d.free + ' GB</span></div>' +
+        '<div class="prog-bar"><div class="prog-fill" id="diskBar' + i + '" style="width:' + d.percent + '%;background:' + c + '"></div></div>' +
+      '</div>';
+    });
+  } else {
+    (data.disks || []).forEach(function(d, i) {
+      var c = getDiskColor(d.percent);
+      var bar = document.getElementById('diskBar' + i);
+      if (bar) { bar.style.width = d.percent + '%'; bar.style.background = c; }
+    });
+  }
+
+  // 最高磁盘告警
+  var worst = 0;
+  (data.disks || []).forEach(function(d) { if (d.percent > worst) worst = d.percent; });
+  var dalert = document.getElementById('diskAlertTag');
+  if (dalert) {
+    dalert.className = worst >= 95 ? 'metric-badge badge-alert' : worst >= 85 ? 'metric-badge badge-warn' : 'metric-badge badge-ok';
+    dalert.textContent = worst >= 95 ? '⚠️ 告警' : worst >= 85 ? '⚡ 注意' : '✓ 正常';
+  }
+
+  // 网络速度
+  if (data.net && lastNet) {
+    var dt = (Date.now() - lastNetTime) / 1000;
+    if (dt > 0) {
+      var ds = data.net.sent - lastNet.sent;
+      var dr = data.net.recv - lastNet.recv;
+      var ups = Math.round((ds / dt) * 8 / 1024);
+      var dns = Math.round((dr / dt) * 8 / 1024);
+      document.getElementById('netSpeed').textContent = '↑' + ups;
+      document.getElementById('netInfo').textContent = '↓' + dns + ' Mbps';
+      ring('netRing', Math.min(dns, 100), 100);
+    }
+  }
+  lastNet = data.net ? { sent: data.net.sent, recv: data.net.recv } : null;
+  lastNetTime = Date.now();
+
+  // 折线图
+  lc.data.datasets[0].data.push(cpu);
+  lc.data.datasets[1].data.push(memPct);
+  if (lc.data.datasets[0].data.length > 16) {
+    lc.data.datasets[0].data.shift();
+    lc.data.datasets[1].data.shift();
+  }
+  lc.update('none');
+
+  // CPU 线程
+  var cores = data.cpu_cores || [];
+  if (cores.length > 0 && document.getElementById('td0') === null) {
+    initThreads(cores.length);
+  }
+  cores.forEach(function(v, i) {
+    var bar = document.getElementById('td' + i);
+    if (bar) { bar.style.width = v + '%'; bar.style.background = getColor(v); }
+  });
+
+  // 顶部状态
+  setTopStatus(cpu < 95 && memPct < 98 && worst < 100);
+}
+
+// === 拉取数据 ===
+function fetchStatus() {
+  fetch('/api/status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { updateUI(d); })
+    .catch(function() {
+      document.getElementById('connBanner').classList.add('show');
+      connected = false;
+    });
+}
+setInterval(fetchStatus, 2000);
+fetchStatus();
+</script>
+</body>
+</html>
