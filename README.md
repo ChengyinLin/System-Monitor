@@ -1,4 +1,10 @@
+<img width="1571" height="707" alt="image" src="https://github.com/user-attachments/assets/b25ade76-45f5-4585-907c-bfbd295cd26c" />
+
+
 # System Dashboard — 使用说明
+
+🚀 使用方法
+在本机运行：
 
 ## 快速启动
 
@@ -46,3 +52,29 @@ ipconfig
 仅使用 Python 标准库 + psutil（已在 conda 环境中）：
 - `conda run python server.py`
 - 或先 `conda activate` 再 `python server.py`
+
+
+
+🌐 在其他电脑使用
+1. 将所有文件（整个 scripts 文件夹）复制到目标 Windows 电脑
+2. 确保目标电脑有 Python + psutil（conda 或 pip install psutil）
+3. 双击 启动系统监控.bat
+
+📋 目标电脑需要的环境
+1. 仅需 Python + psutil + Flask（conda 自带）
+2. conda list psutil   # 确保已安装
+3. conda list flask    # 确保已安装
+
+如果没有，安装命令：
+1. conda install psutil flask
+2. pip install psutil flask
+
+🔥 已实现功能
+
+✅ 真实系统数据 — 通过 psutil + nvidia-smi 读取
+
+✅ 自动刷新 — 每2秒更新一次
+
+✅ 多机部署 — 复制到任意 Windows 电脑即可运行
+
+✅ 局域网访问 — 同网络下其他设备可用浏览器打开
