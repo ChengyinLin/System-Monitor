@@ -1,36 +1,48 @@
-# System-Monitor
-Local computer status monitoring for Windows system
+# System Dashboard — 使用说明
 
-🚀 使用方法
-方案：复制到目标电脑运行
-1. 将整个 scripts 文件夹复制到目标 Windows 电脑
-2. 确保目标电脑有 Python + psutil（conda 或 pip install psutil）
-3. 双击 启动系统监控.bat
+## 快速启动
 
-仪表盘会显示该电脑的真实数据：
-1. CPU 实时占用 + 每核心线程
-2. 内存总量/已用/百分比
-3. NVIDIA GPU（利用率、温度、显存）
-4. 所有磁盘容量
-5. 网络上传/下载速度
-6.CPU/GPU 温度双圆环
+**方式一：双击运行**
+```
+双击「启动系统监控.bat」
+```
 
-📋 目标电脑需要的环境
-1. 仅需 Python + psutil + Flask（conda 自带）
-2. conda list psutil
-3. conda list flask
+**方式二：命令行**
+```
+cd scripts
+python server.py
+```
 
-如果没有，安装命令：
-conda install psutil flask 或 pip install psutil flask
+启动后浏览器自动打开 `http://127.0.0.1:18999`
 
-🔥 已实现功能
+## 局域网访问
 
-✅ 真实系统数据 — 通过 psutil + nvidia-smi 读取
+在同一 WiFi/局域网下，其他设备用浏览器访问：
+```
+http://<电脑IP>:18999
+```
 
-✅ 自动刷新 — 每2秒更新一次
+如何查看本机 IP：
+```powershell
+ipconfig
+```
+找「IPv4 地址」即可，例如 `192.168.1.100`
 
-✅ 多机部署 — 复制到任意 Windows 电脑即可运行
+## 实时数据
 
-✅ 局域网访问 — 同网络下其他设备可用浏览器打开
+- **CPU**：总览 + 每核心线程占用率
+- **内存**：总量 / 已用 / 百分比
+- **GPU**：NVIDIA（利用率、温度、显存）— 需要 nvidia-smi
+- **磁盘**：所有分区容量和使用率
+- **网络**：实时上传/下载速度
+- **温度**：CPU + GPU 双圆环
 
-<img width="1575" height="706" alt="image" src="https://github.com/user-attachments/assets/3afee877-c953-4a62-9d2a-a94f5f07da66" />
+## 关闭
+
+在运行的终端窗口按 `Ctrl + C`，然后关闭窗口即可。
+
+## 依赖
+
+仅使用 Python 标准库 + psutil（已在 conda 环境中）：
+- `conda run python server.py`
+- 或先 `conda activate` 再 `python server.py`
