@@ -1,3 +1,7 @@
+## 项目简介
+系统监控仪表盘是一个实时监控电脑硬件状态的Web应用，支持CPU、内存、GPU、磁盘、网络的实时监控，特别优化了Intel独立显卡的识别功能。
+
+
 <img width="1571" height="707" alt="image" src="https://github.com/user-attachments/assets/b25ade76-45f5-4585-907c-bfbd295cd26c" />
 
 
